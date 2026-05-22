@@ -503,7 +503,6 @@ async function pollStatus() {
     if (!connected && d.hasQR) { qrCard.style.display = 'block'; startQRPolling(); }
     else                        { qrCard.style.display = 'none';  stopQRPolling(); }
 
-    document.getElementById('send-btn').disabled = !connected;
     document.getElementById('once-btn').disabled = false;
     document.getElementById('sched-btn').disabled = false;
   } catch {}
@@ -609,16 +608,17 @@ async function sendNow() {
   const phone   = document.getElementById('s-phone').value.trim();
   const message = document.getElementById('s-msg').value.trim();
   if (!phone || !message) { flash('send-flash', 'נא למלא טלפון והודעה', false); return; }
+  if (!connected) { flash('send-flash', 'WhatsApp לא מחובר — סרוק את ה-QR תחילה', false); return; }
 
   const btn = document.getElementById('send-btn');
   btn.disabled = true;
   try {
-    const d = await fetch('/api/send', {
+    const r = await fetch('/api/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone, message }),
-    }).then(r => r.json());
-
+    });
+    const d = await r.json();
     if (d.success) {
       flash('send-flash', 'ההודעה נשלחה בהצלחה ✓', true);
       document.getElementById('s-msg').value = '';
@@ -626,7 +626,7 @@ async function sendNow() {
       flash('send-flash', d.error || 'שגיאה בשליחה', false);
     }
   } catch { flash('send-flash', 'שגיאת רשת', false); }
-  finally { btn.disabled = !connected; }
+  finally { btn.disabled = false; }
 }
 
 // ── Schedule Once ──────────────────────────────────────────────────────────
@@ -703,7 +703,6 @@ async function deleteJob(id) {
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────
-document.getElementById('send-btn').disabled = true;
 setDefaultDatetime();
 
 pollStatus();
