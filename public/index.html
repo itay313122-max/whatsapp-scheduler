@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WhatsApp Scheduler</title>
+<style>
+  :root {
+    --green:      #25d366;
+    --green-dark: #128c7e;
+    --green-dim:  #1a9e50;
+    --bg:         #0e1117;
+    --surface:    #161b22;
+    --surface2:   #1c2230;
+    --border:     #2a3245;
+    --text:       #e6edf3;
+    --muted:      #7d8fa3;
+    --red:        #e05252;
+    --red-dark:   #a63333;
+    --radius:     10px;
+    --shadow:     0 4px 24px rgba(0,0,0,.4);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: .9rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 12px rgba(0,0,0,.5);
+  }
+  .header-logo {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--green);
+  }
+  .header-logo svg { width: 28px; height: 28px; fill: var(--green); flex-shrink: 0; }
+
+  #status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .35rem .9rem;
+    border-radius: 20px;
+    font-size: .82rem;
+    font-weight: 600;
+    letter-spacing: .03em;
+    transition: background .3s, color .3s;
+  }
+  #status-badge.connected    { background: rgba(37,211,102,.15); color: var(--green); border: 1px solid rgba(37,211,102,.3); }
+  #status-badge.disconnected { background: rgba(224,82,82,.13);  color: var(--red);   border: 1px solid rgba(224,82,82,.3); }
+  #status-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  #status-badge.connected .dot { animation: pulse 1.8s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.7)} }
+  #status-user { font-size: .8rem; color: var(--muted); margin-top: .1rem; }
+
+  /* ── Layout ── */
+  main {
+    max-width: 1020px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.6rem;
+  }
+
+  /* ── Card ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    box-shadow: var(--shadow);
+  }
+  .card-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--green);
+    margin-bottom: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding-bottom: .8rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-title svg { width: 18px; height: 18px; fill: var(--green); flex-shrink: 0; }
+
+  /* ── QR ── */
+  #qr-section { text-align: center; }
+  #qr-section p { color: var(--muted); font-size: .9rem; margin-bottom: 1rem; }
+  #qr-wrapper { display: inline-block; background: #fff; padding: 12px; border-radius: 10px; min-width: 200px; min-height: 200px; }
+  #qr-img { display: block; width: 200px; height: 200px; object-fit: contain; }
+  #qr-placeholder { width:200px; height:200px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:.5rem; color:#aaa; font-size:.85rem; }
+  .spinner { width:30px; height:30px; border:3px solid #ddd; border-top-color:var(--green); border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex;
+    gap: .4rem;
+    margin-bottom: 1.4rem;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 0;
+  }
+  .tab-btn {
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    padding: .55rem 1.1rem;
+    font-size: .92rem;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    border-radius: 6px 6px 0 0;
+    transition: color .18s, border-color .18s, background .18s;
+    font-family: inherit;
+    white-space: nowrap;
+  }
+  .tab-btn:hover { color: var(--text); background: var(--surface2); }
+  .tab-btn.active { color: var(--green); border-bottom-color: var(--green); }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  /* ── Forms ── */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
+  .form-full { grid-column: 1 / -1; }
+
+  .field { display: flex; flex-direction: column; gap: .4rem; }
+  label { font-size: .8rem; color: var(--muted); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+
+  input, textarea {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text);
+    font-size: .95rem;
+    font-family: inherit;
+    padding: .6rem .85rem;
+    width: 100%;
+    transition: border-color .2s, box-shadow .2s;
+    outline: none;
+  }
+  input::-webkit-calendar-picker-indicator { filter: invert(.6); cursor: pointer; }
+  input::placeholder, textarea::placeholder { color: var(--muted); }
+  input:focus, textarea:focus { border-color: var(--green-dark); box-shadow: 0 0 0 3px rgba(37,211,102,.12); }
+  textarea { resize: vertical; min-height: 78px; }
+
+  .cron-hint {
+    font-size: .78rem;
+    color: var(--muted);
+    margin-top: .3rem;
+    line-height: 1.8;
+  }
+  .cron-hint code {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0 .35rem;
+    font-size: .76rem;
+    color: var(--green);
+    font-family: 'Consolas', 'Fira Code', monospace;
+  }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .45rem;
+    border: none;
+    border-radius: 7px;
+    padding: .65rem 1.4rem;
+    font-size: .92rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .18s, transform .1s, opacity .18s;
+    font-family: inherit;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn-primary { background: var(--green); color: #000; }
+  .btn-primary:hover { background: var(--green-dim); }
+  .btn-danger  { background: var(--red); color: #fff; padding: .38rem .85rem; font-size: .82rem; }
+  .btn-danger:hover { background: var(--red-dark); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+  .btn svg { width: 16px; height: 16px; fill: currentColor; flex-shrink: 0; }
+
+  .form-footer { display: flex; align-items: center; gap: 1rem; margin-top: 1rem; flex-wrap: wrap; }
+
+  .flash { font-size: .85rem; padding: .35rem .8rem; border-radius: 6px; animation: fadeIn .25s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:none} }
+  .flash.ok  { background: rgba(37,211,102,.12); color: var(--green); border: 1px solid rgba(37,211,102,.25); }
+  .flash.err { background: rgba(224,82,82,.12);  color: var(--red);   border: 1px solid rgba(224,82,82,.25); }
+
+  /* ── Table ── */
+  .table-wrap { overflow-x: auto; margin-top: .3rem; }
+  table { width: 100%; border-collapse: collapse; font-size: .86rem; min-width: 760px; }
+  thead tr { border-bottom: 2px solid var(--border); }
+  th {
+    text-align: right;
+    padding: .6rem .75rem;
+    color: var(--muted);
+    font-size: .76rem;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background .15s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody tr.row-done { opacity: .55; }
+  td { padding: .65rem .75rem; vertical-align: middle; }
+  td.mono { font-family: 'Consolas','Fira Code',monospace; font-size: .81rem; color: var(--green); }
+  td.dim  { color: var(--muted); font-size: .82rem; }
+
+  .pill {
+    display: inline-block;
+    padding: .18rem .55rem;
+    border-radius: 12px;
+    font-size: .74rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .pill.active   { background: rgba(37,211,102,.15); color: var(--green);  border: 1px solid rgba(37,211,102,.3); }
+  .pill.inactive { background: rgba(125,143,163,.1); color: var(--muted);  border: 1px solid rgba(125,143,163,.2); }
+  .pill.done     { background: rgba(37,211,102,.08); color: #5eb87a;        border: 1px solid rgba(37,211,102,.2); }
+
+  .type-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    font-size: .78rem;
+    white-space: nowrap;
+    color: var(--muted);
+  }
+
+  .msg-cell { max-width: 170px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .empty-row td { text-align: center; color: var(--muted); padding: 2.5rem; font-size: .9rem; }
+
+  .count-badge {
+    background: var(--green);
+    color: #000;
+    border-radius: 10px;
+    font-size: .72rem;
+    font-weight: 800;
+    padding: .1rem .5rem;
+    margin-right: .3rem;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-logo">
+    <svg viewBox="0 0 24 24">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+      <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.556 4.118 1.528 5.855L.057 23.886a.5.5 0 0 0 .614.635l6.22-1.625A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.894a9.916 9.916 0 0 1-5.048-1.378l-.361-.214-3.742.981.998-3.645-.236-.374A9.878 9.878 0 0 1 2.106 12C2.106 6.533 6.533 2.106 12 2.106S21.894 6.533 21.894 12 17.467 21.894 12 21.894z"/>
+    </svg>
+    WhatsApp Scheduler
+  </div>
+  <div style="text-align:left">
+    <div id="status-badge" class="disconnected"><span class="dot"></span><span id="status-text">מנותק</span></div>
+    <div id="status-user"></div>
+  </div>
+</header>
+
+<main>
+
+  <!-- QR Card -->
+  <div id="qr-card" class="card" style="display:none">
+    <div class="card-title">
+      <svg viewBox="0 0 24 24"><path d="M3 3h7v7H3V3zm1 1v5h5V4H4zm1 1h3v3H5V5zm8-2h7v7h-7V3zm1 1v5h5V4h-5zm1 1h3v3h-3V5zM3 13h7v7H3v-7zm1 1v5h5v-5H4zm1 1h3v3H5v-3zm10 0h2v2h-2v-2zm2 2h2v2h-2v-2zm-2 2h2v2h-2v-2zm2 2h2v2h-2v-2zm-4-6h2v2h-2v-2zm2 0h2v2h-2v-2zm-2 4h2v2h-2v-2z"/></svg>
+      סרוק QR לחיבור
+    </div>
+    <div id="qr-section">
+      <p>פתח WhatsApp ← מכשירים מקושרים ← קשר מכשיר ← סרוק את הקוד</p>
+      <div id="qr-wrapper">
+        <div id="qr-placeholder"><div class="spinner"></div><span>טוען...</span></div>
+        <img id="qr-img" src="" alt="QR" style="display:none" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Forms Card with Tabs -->
+  <div class="card">
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="showTab('send')">
+        ⚡ שליחה מיידית
+      </button>
+      <button class="tab-btn" onclick="showTab('once')">
+        1️⃣ חד פעמי
+      </button>
+      <button class="tab-btn" onclick="showTab('recurring')">
+        🔁 חוזר
+      </button>
+    </div>
+
+    <!-- Tab: Send Now -->
+    <div id="tab-send" class="tab-pane active">
+      <div class="form-grid">
+        <div class="field">
+          <label>מספר טלפון</label>
+          <input id="s-phone" type="text" placeholder="0501234567 או 972501234567" />
+        </div>
+        <div class="field form-full">
+          <label>הודעה</label>
+          <textarea id="s-msg" placeholder="הקלד הודעה..."></textarea>
+        </div>
+      </div>
+      <div class="form-footer">
+        <button class="btn btn-primary" id="send-btn" onclick="sendNow()">
+          <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+          שלח עכשיו
+        </button>
+        <span id="send-flash"></span>
+      </div>
+    </div>
+
+    <!-- Tab: Once -->
+    <div id="tab-once" class="tab-pane">
+      <div class="form-grid">
+        <div class="field">
+          <label>מספר טלפון</label>
+          <input id="o-phone" type="text" placeholder="0501234567" />
+        </div>
+        <div class="field">
+          <label>תאריך ושעה</label>
+          <input id="o-datetime" type="datetime-local" />
+        </div>
+        <div class="field form-full">
+          <label>הודעה</label>
+          <textarea id="o-msg" placeholder="הקלד הודעה..."></textarea>
+        </div>
+      </div>
+      <div class="form-footer">
+        <button class="btn btn-primary" id="once-btn" onclick="scheduleOnce()">
+          <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/></svg>
+          תזמן שליחה
+        </button>
+        <span id="once-flash"></span>
+      </div>
+    </div>
+
+    <!-- Tab: Recurring -->
+    <div id="tab-recurring" class="tab-pane">
+      <div class="form-grid">
+        <div class="field">
+          <label>מזהה משימה</label>
+          <input id="j-id" type="text" placeholder="morning-reminder" />
+        </div>
+        <div class="field">
+          <label>מספר טלפון</label>
+          <input id="j-phone" type="text" placeholder="0501234567" />
+        </div>
+        <div class="field form-full">
+          <label>הודעה</label>
+          <textarea id="j-msg" placeholder="הקלד הודעה..."></textarea>
+        </div>
+        <div class="field form-full">
+          <label>Cron Expression</label>
+          <input id="j-cron" type="text" placeholder="0 9 * * *" style="font-family:'Consolas','Fira Code',monospace" />
+          <div class="cron-hint">
+            כל יום ב-9:00 = <code>0 9 * * *</code> &nbsp;|&nbsp;
+            כל יום ראשון ב-8:30 = <code>30 8 * * 0</code> &nbsp;|&nbsp;
+            כל שעה = <code>0 * * * *</code> &nbsp;|&nbsp;
+            כל ה-1 לחודש = <code>0 9 1 * *</code>
+          </div>
+        </div>
+      </div>
+      <div class="form-footer">
+        <button class="btn btn-primary" id="sched-btn" onclick="scheduleRecurring()">
+          <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 16H5V8h14v11z"/></svg>
+          תזמן
+        </button>
+        <span id="sched-flash"></span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Schedules Table -->
+  <div class="card">
+    <div class="card-title">
+      <svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+      תזמונים
+      <span class="count-badge" id="jobs-count">0</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>מזהה</th>
+            <th>סוג</th>
+            <th>טלפון</th>
+            <th>הודעה</th>
+            <th>לוח זמנים</th>
+            <th>נשלח</th>
+            <th>שליחה הבאה</th>
+            <th>נשלח לאחרונה</th>
+            <th>סטטוס</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="schedules-tbody">
+          <tr class="empty-row"><td colspan="10">טוען...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ── Helpers ────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const p = n => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function fmtCountdown(iso) {
+  const diff = new Date(iso).getTime() - Date.now();
+  if (diff <= 0) return 'כבר עבר';
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  if (h >= 24) {
+    const days = Math.floor(h / 24);
+    return `עוד ${days}י' ${h % 24}ש'`;
+  }
+  return h > 0 ? `עוד ${h}ש' ${m}ד'` : `עוד ${m}ד'`;
+}
+
+function flash(id, msg, ok) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.className = 'flash ' + (ok ? 'ok' : 'err');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.textContent = ''; el.className = 'flash'; }, 4500);
+}
+
+// ── Tabs ───────────────────────────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', ['send','once','recurring'][i] === name);
+  });
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ── Default datetime = now + 1h ────────────────────────────────────────────
+function setDefaultDatetime() {
+  const d = new Date(Date.now() + 3600000);
+  const pad = n => String(n).padStart(2, '0');
+  const local = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  document.getElementById('o-datetime').value = local;
+}
+
+// ── Status Polling ─────────────────────────────────────────────────────────
+let connected = false;
+let qrPolling = null;
+
+async function pollStatus() {
+  try {
+    const d = await fetch('/api/status').then(r => r.json());
+    connected = d.connected;
+
+    const badge = document.getElementById('status-badge');
+    badge.className = connected ? 'connected' : 'disconnected';
+    document.getElementById('status-text').textContent = connected ? 'מחובר' : 'מנותק';
+    document.getElementById('status-user').textContent =
+      connected && d.name ? d.name + (d.phone ? ' · ' + d.phone : '') : '';
+
+    const qrCard = document.getElementById('qr-card');
+    if (!connected && d.hasQR) { qrCard.style.display = 'block'; startQRPolling(); }
+    else                        { qrCard.style.display = 'none';  stopQRPolling(); }
+
+    document.getElementById('send-btn').disabled = !connected;
+    document.getElementById('once-btn').disabled = false;
+    document.getElementById('sched-btn').disabled = false;
+  } catch {}
+}
+
+async function fetchQR() {
+  try {
+    const r = await fetch('/api/qr');
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d.qr) {
+      document.getElementById('qr-placeholder').style.display = 'none';
+      const img = document.getElementById('qr-img');
+      img.src = d.qr;
+      img.style.display = 'block';
+    }
+  } catch {}
+}
+
+function startQRPolling() {
+  if (qrPolling) return;
+  fetchQR();
+  qrPolling = setInterval(fetchQR, 3000);
+}
+
+function stopQRPolling() {
+  if (!qrPolling) return;
+  clearInterval(qrPolling);
+  qrPolling = null;
+  document.getElementById('qr-placeholder').style.display = 'flex';
+  document.getElementById('qr-img').style.display = 'none';
+}
+
+// ── Schedules Table ────────────────────────────────────────────────────────
+async function loadSchedules() {
+  try {
+    const list = await fetch('/api/schedules').then(r => r.json());
+
+    document.getElementById('jobs-count').textContent =
+      list.filter(s => s.isRunning).length;
+
+    const tbody = document.getElementById('schedules-tbody');
+
+    if (!list.length) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="10">אין תזמונים</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = list.map(s => {
+      const isOnce = s.type === 'once';
+      const isDone = isOnce && !s.active;
+
+      const typeTag = isOnce
+        ? '<span class="type-tag">1️⃣ חד-פעמי</span>'
+        : '<span class="type-tag">🔁 חוזר</span>';
+
+      const schedule = isOnce
+        ? `<span class="dim">${esc(fmtDate(s.sendAt))}</span>`
+        : `<span class="mono">${esc(s.cronExpression)}</span>`;
+
+      const nextSend = isDone
+        ? '<span style="color:#5eb87a">✅ נשלח</span>'
+        : isOnce && s.active && s.sendAt
+          ? `<span class="countdown" data-sendat="${esc(s.sendAt)}">${fmtCountdown(s.sendAt)}</span>`
+          : '<span style="color:var(--muted)">—</span>';
+
+      const statusPill = isDone
+        ? '<span class="pill done">✅ נשלח</span>'
+        : s.isRunning
+          ? '<span class="pill active">פעיל</span>'
+          : '<span class="pill inactive">לא פעיל</span>';
+
+      const rowClass = isDone ? 'row-done' : '';
+
+      return `
+        <tr class="${rowClass}">
+          <td class="mono">${esc(s.id)}</td>
+          <td>${typeTag}</td>
+          <td class="dim">${esc(s.phone)}</td>
+          <td><div class="msg-cell" title="${esc(s.message)}">${esc(s.message)}</div></td>
+          <td>${schedule}</td>
+          <td class="dim" style="text-align:center">${s.sentCount || 0}</td>
+          <td class="dim">${nextSend}</td>
+          <td class="dim">${fmtDate(s.lastSent)}</td>
+          <td>${statusPill}</td>
+          <td>
+            ${isDone ? '' : `<button class="btn btn-danger" onclick="deleteJob('${esc(s.id)}')">מחק</button>`}
+          </td>
+        </tr>`;
+    }).join('');
+  } catch {}
+}
+
+// Update only countdown cells — no full re-render every 30s
+function updateCountdowns() {
+  document.querySelectorAll('.countdown[data-sendat]').forEach(el => {
+    el.textContent = fmtCountdown(el.dataset.sendat);
+  });
+}
+
+// ── Send Now ───────────────────────────────────────────────────────────────
+async function sendNow() {
+  const phone   = document.getElementById('s-phone').value.trim();
+  const message = document.getElementById('s-msg').value.trim();
+  if (!phone || !message) { flash('send-flash', 'נא למלא טלפון והודעה', false); return; }
+
+  const btn = document.getElementById('send-btn');
+  btn.disabled = true;
+  try {
+    const d = await fetch('/api/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, message }),
+    }).then(r => r.json());
+
+    if (d.success) {
+      flash('send-flash', 'ההודעה נשלחה בהצלחה ✓', true);
+      document.getElementById('s-msg').value = '';
+    } else {
+      flash('send-flash', d.error || 'שגיאה בשליחה', false);
+    }
+  } catch { flash('send-flash', 'שגיאת רשת', false); }
+  finally { btn.disabled = !connected; }
+}
+
+// ── Schedule Once ──────────────────────────────────────────────────────────
+async function scheduleOnce() {
+  const phone    = document.getElementById('o-phone').value.trim();
+  const dtVal    = document.getElementById('o-datetime').value;
+  const message  = document.getElementById('o-msg').value.trim();
+
+  if (!phone || !dtVal || !message) { flash('once-flash', 'נא למלא את כל השדות', false); return; }
+
+  const sendAt = new Date(dtVal).toISOString();
+  if (new Date(dtVal).getTime() <= Date.now()) { flash('once-flash', 'התאריך חייב להיות בעתיד', false); return; }
+
+  const id = String(Date.now());
+  const btn = document.getElementById('once-btn');
+  btn.disabled = true;
+  try {
+    const d = await fetch('/api/schedule-once', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, phone, message, sendAt }),
+    }).then(r => r.json());
+
+    if (d.success) {
+      flash('once-flash', 'תוזמן בהצלחה ✓', true);
+      document.getElementById('o-msg').value = '';
+      setDefaultDatetime();
+      loadSchedules();
+    } else {
+      flash('once-flash', d.error || 'שגיאה בתזמון', false);
+    }
+  } catch { flash('once-flash', 'שגיאת רשת', false); }
+  finally { btn.disabled = false; }
+}
+
+// ── Schedule Recurring ─────────────────────────────────────────────────────
+async function scheduleRecurring() {
+  const id             = document.getElementById('j-id').value.trim();
+  const phone          = document.getElementById('j-phone').value.trim();
+  const message        = document.getElementById('j-msg').value.trim();
+  const cronExpression = document.getElementById('j-cron').value.trim();
+
+  if (!id || !phone || !message || !cronExpression) { flash('sched-flash', 'נא למלא את כל השדות', false); return; }
+
+  const btn = document.getElementById('sched-btn');
+  btn.disabled = true;
+  try {
+    const d = await fetch('/api/schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, phone, message, cronExpression }),
+    }).then(r => r.json());
+
+    if (d.success) {
+      flash('sched-flash', d.action === 'created' ? 'המשימה נוצרה ✓' : 'המשימה עודכנה ✓', true);
+      document.getElementById('j-id').value = '';
+      document.getElementById('j-cron').value = '';
+      document.getElementById('j-msg').value = '';
+      loadSchedules();
+    } else {
+      flash('sched-flash', d.error || 'שגיאה בתזמון', false);
+    }
+  } catch { flash('sched-flash', 'שגיאת רשת', false); }
+  finally { btn.disabled = false; }
+}
+
+// ── Delete ─────────────────────────────────────────────────────────────────
+async function deleteJob(id) {
+  if (!confirm(`למחוק את המשימה "${id}"?`)) return;
+  try {
+    await fetch('/api/schedule/' + encodeURIComponent(id), { method: 'DELETE' });
+    loadSchedules();
+  } catch {}
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+document.getElementById('send-btn').disabled = true;
+setDefaultDatetime();
+
+pollStatus();
+loadSchedules();
+setInterval(pollStatus,  5000);
+setInterval(loadSchedules, 5000);
+setInterval(updateCountdowns, 30000);
+</script>
+</body>
+</html>
