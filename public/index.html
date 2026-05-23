@@ -500,18 +500,25 @@ async function pollStatus() {
       connected && d.name ? d.name + (d.phone ? ' · ' + d.phone : '') : '';
 
     const qrCard = document.getElementById('qr-card');
-    if (!connected && d.hasQR) { qrCard.style.display = 'block'; startQRPolling(); }
-    else                        { qrCard.style.display = 'none';  stopQRPolling(); }
-
-    document.getElementById('once-btn').disabled = false;
-    document.getElementById('sched-btn').disabled = false;
+    if (!connected) {
+      qrCard.style.display = 'block';
+      startQRPolling();
+    } else {
+      qrCard.style.display = 'none';
+      stopQRPolling();
+    }
   } catch {}
 }
 
 async function fetchQR() {
   try {
     const r = await fetch('/api/qr');
-    if (!r.ok) return;
+    if (!r.ok) {
+      document.getElementById('qr-placeholder').style.display = 'flex';
+      document.getElementById('qr-placeholder').querySelector('span').textContent = 'מתחבר ל-WhatsApp...';
+      document.getElementById('qr-img').style.display = 'none';
+      return;
+    }
     const d = await r.json();
     if (d.qr) {
       document.getElementById('qr-placeholder').style.display = 'none';
